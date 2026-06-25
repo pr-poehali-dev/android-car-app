@@ -47,13 +47,14 @@ function saveState(data: object) {
   if (IS_ANDROID) { window.AndroidBridge!.saveData(json); } else { localStorage.setItem('car_service_data', json); }
 }
 
-type Screen = 'main' | 'oil' | 'filter_eng' | 'filter_cab' | 'brakes' | 'history' | 'settings';
+type Screen = 'main' | 'oil' | 'filter_eng' | 'filter_cab' | 'brakes' | 'voltage' | 'history' | 'settings';
 
 const MENU_ITEMS: { id: Screen; label: string; icon: string }[] = [
   { id: 'oil',        label: 'Моторное масло',    icon: 'Droplet' },
   { id: 'filter_eng', label: 'Фильтр двигателя',  icon: 'Wind' },
   { id: 'filter_cab', label: 'Фильтр салона',     icon: 'AirVent' },
   { id: 'brakes',     label: 'Тормозные колодки', icon: 'Disc3' },
+  { id: 'voltage',    label: 'Напряжение сети',   icon: 'Zap' },
   { id: 'history',    label: 'История замен',      icon: 'History' },
   { id: 'settings',   label: 'Показания',          icon: 'SlidersHorizontal' },
 ];
@@ -229,6 +230,7 @@ export default function Index() {
                 onReset={() => resetService(services.find(s => s.id === screen)!)}
               />
             )}
+            {screen === 'voltage' && <VoltageScreen voltage={voltage} engineRunning={engineRunning} />}
             {screen === 'history' && <HistoryScreen history={history} />}
             {screen === 'settings' && (
               <SettingsScreen
@@ -443,6 +445,76 @@ function InfoCell({ label, value, warn }: { label: string; value: string; warn?:
     <div style={{ padding: '8px 12px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, background: 'rgba(255,255,255,0.02)' }}>
       <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: 'rgba(255,255,255,0.28)' }}>{label}</div>
       <div className="font-display text-sm tracking-wide" style={{ color: warn ? '#e82020' : 'rgba(255,255,255,0.7)' }}>{value}</div>
+    </div>
+  );
+}
+
+/* ── Напряжение сети ───────────────────────────────────────── */
+function VoltageScreen({ voltage, engineRunning }: { voltage: number; engineRunning: boolean }) {
+  const status = engineRunning
+    ? { label: 'Генератор работает', sub: 'Зарядка АКБ активна', color: '#e82020', glow: true }
+    : voltage >= 12.4
+    ? { label: 'АКБ заряжен', sub: 'Двигатель не работает', color: 'rgba(255,255,255,0.65)', glow: false }
+    : { label: 'АКБ разряжается', sub: 'Низкое напряжение', color: '#c05010', glow: false };
+
+  const bars = [
+    { label: 'Критически низкое', range: '< 11.5 В',  min: 0,   max: 11.5 },
+    { label: 'АКБ разряжен',      range: '11.5–12.0 В', min: 11.5, max: 12.0 },
+    { label: 'АКБ заряжен',       range: '12.0–12.6 В', min: 12.0, max: 12.6 },
+    { label: 'Норма (стоянка)',   range: '12.6–13.0 В', min: 12.6, max: 13.0 },
+    { label: 'Генератор',         range: '13.0–14.5 В', min: 13.0, max: 14.5 },
+    { label: 'Перезаряд',        range: '> 14.5 В',   min: 14.5, max: 16.0 },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="font-display text-[10px] tracking-[0.3em] uppercase text-white/30 mb-1">Бортовая сеть</div>
+        <div className="flex items-end gap-3">
+          <span className="font-display tracking-wide" style={{ fontSize: 52, lineHeight: 1, color: status.color, textShadow: status.glow ? '0 0 20px rgba(220,20,20,0.6)' : 'none' }}>
+            {voltage.toFixed(1)}
+          </span>
+          <span className="font-display text-xl text-white/30 mb-2">В</span>
+        </div>
+        <div className="mt-1">
+          <div className="font-display text-sm tracking-wider uppercase" style={{ color: status.color }}>{status.label}</div>
+          <div className="text-[11px] text-white/30 mt-0.5">{status.sub}</div>
+        </div>
+      </div>
+
+      {/* Шкала напряжений */}
+      <div className="space-y-2">
+        {bars.map((b) => {
+          const active = voltage >= b.min && voltage < b.max;
+          return (
+            <div key={b.label} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '7px 12px', borderRadius: 7,
+              border: `1px solid ${active ? 'rgba(200,20,20,0.35)' : 'rgba(255,255,255,0.05)'}`,
+              background: active ? 'rgba(120,0,0,0.1)' : 'rgba(255,255,255,0.015)',
+            }}>
+              <div style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: active ? '#e82020' : 'rgba(255,255,255,0.15)',
+                boxShadow: active ? '0 0 6px rgba(220,20,20,0.8)' : 'none',
+                flexShrink: 0,
+              }} />
+              <span className="font-display text-xs tracking-wider uppercase flex-1" style={{ color: active ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.3)' }}>
+                {b.label}
+              </span>
+              <span className="font-display text-xs" style={{ color: active ? '#e82020' : 'rgba(255,255,255,0.2)' }}>
+                {b.range}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ height: 1, background: 'rgba(255,255,255,0.05)' }} />
+      <div className="grid grid-cols-2 gap-3">
+        <InfoCell label="Порог записи моточасов" value="≥ 14.0 В" />
+        <InfoCell label="Источник данных" value={typeof window !== 'undefined' && !!window.AndroidBridge ? 'ACC/BAT' : 'Симуляция'} />
+      </div>
     </div>
   );
 }
