@@ -1,12 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader,
+  DialogTitle, DialogTrigger, DialogFooter,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,33 +10,19 @@ import { Label } from '@/components/ui/label';
 
 declare global {
   interface Window {
-    AndroidBridge?: {
-      getVoltage: () => number;
-      getGpsKm: () => number;
-      saveData: (json: string) => void;
-      loadData: () => string;
-    };
+    AndroidBridge?: { getVoltage: () => number; getGpsKm: () => number; saveData: (json: string) => void; loadData: () => string; };
     onVoltageUpdate?: (v: number) => void;
     onGpsKmUpdate?: (km: number) => void;
   }
 }
 
 interface Service {
-  id: string;
-  name: string;
-  icon: string;
-  intervalHours: number;
-  intervalKm: number;
-  lastHours: number;
-  lastKm: number;
+  id: string; name: string; icon: string;
+  intervalHours: number; intervalKm: number;
+  lastHours: number; lastKm: number;
 }
-
 interface HistoryItem {
-  id: string;
-  service: string;
-  date: string;
-  hours: number;
-  km: number;
+  id: string; service: string; date: string; hours: number; km: number;
 }
 
 const VOLTAGE_THRESHOLD = 14;
@@ -49,27 +31,30 @@ const IS_ANDROID = typeof window !== 'undefined' && !!window.AndroidBridge;
 const DEFAULT_SERVICES: Service[] = [
   { id: 'oil',    name: 'Моторное масло',    icon: 'Droplet', intervalHours: 250, intervalKm: 10000, lastHours: 0, lastKm: 0 },
   { id: 'filter', name: 'Воздушный фильтр',  icon: 'Wind',    intervalHours: 500, intervalKm: 20000, lastHours: 0, lastKm: 0 },
-  { id: 'brakes', name: 'Тормозные колодки', icon: 'Disc',    intervalHours: 750, intervalKm: 30000, lastHours: 0, lastKm: 0 },
+  { id: 'brakes', name: 'Тормозные колодки', icon: 'Disc3',   intervalHours: 750, intervalKm: 30000, lastHours: 0, lastKm: 0 },
 ];
 
 function loadState() {
   try {
-    const raw = IS_ANDROID
-      ? window.AndroidBridge!.loadData()
-      : localStorage.getItem('car_service_data');
+    const raw = IS_ANDROID ? window.AndroidBridge!.loadData() : localStorage.getItem('car_service_data');
     if (raw) return JSON.parse(raw);
   } catch (e) { void e; }
   return null;
 }
-
 function saveState(data: object) {
   const json = JSON.stringify(data);
-  if (IS_ANDROID) {
-    window.AndroidBridge!.saveData(json);
-  } else {
-    localStorage.setItem('car_service_data', json);
-  }
+  if (IS_ANDROID) { window.AndroidBridge!.saveData(json); } else { localStorage.setItem('car_service_data', json); }
 }
+
+type Screen = 'main' | 'oil' | 'filter' | 'brakes' | 'history' | 'settings';
+
+const MENU_ITEMS: { id: Screen; label: string; icon: string }[] = [
+  { id: 'oil',     label: 'Моторное масло',    icon: 'Droplet' },
+  { id: 'filter',  label: 'Воздушный фильтр',  icon: 'Wind' },
+  { id: 'brakes',  label: 'Тормозные колодки', icon: 'Disc3' },
+  { id: 'history', label: 'История замен',      icon: 'History' },
+  { id: 'settings',label: 'Показания',          icon: 'SlidersHorizontal' },
+];
 
 export default function Index() {
   const saved = loadState();
@@ -78,43 +63,33 @@ export default function Index() {
   const [totalKm, setTotalKm]         = useState<number>(saved?.totalKm ?? 0);
   const [services, setServices]       = useState<Service[]>(saved?.services ?? DEFAULT_SERVICES);
   const [history, setHistory]         = useState<HistoryItem[]>(saved?.history ?? []);
-
   const [voltage, setVoltage]         = useState<number>(12.4);
+  const [screen, setScreen]           = useState<Screen>('main');
   const engineRunning                 = voltage >= VOLTAGE_THRESHOLD;
   const secondsRef                    = useRef<number>(0);
-
   const [hoursInput, setHoursInput]   = useState(String(saved?.engineHours ?? 0));
   const [kmInput, setKmInput]         = useState(String(saved?.totalKm ?? 0));
 
-  // Получаем напряжение: от Android через callback или polling
   useEffect(() => {
     if (IS_ANDROID) {
-      // Android вызывает window.onVoltageUpdate(v) при каждом измерении
-      window.onVoltageUpdate = (v: number) => setVoltage(v);
-      window.onGpsKmUpdate   = (km: number) => setTotalKm(km);
-      return () => {
-        window.onVoltageUpdate = undefined;
-        window.onGpsKmUpdate   = undefined;
-      };
+      window.onVoltageUpdate = (v) => setVoltage(v);
+      window.onGpsKmUpdate   = (km) => setTotalKm(km);
+      return () => { window.onVoltageUpdate = undefined; window.onGpsKmUpdate = undefined; };
     } else {
-      // В браузере — симуляция для разработки
       const id = setInterval(() => {
-        const v = parseFloat((Math.random() > 0.3 ? 14.1 + Math.random() * 0.4 : 12.3 + Math.random() * 0.4).toFixed(1));
-        setVoltage(v);
+        setVoltage(parseFloat((Math.random() > 0.3 ? 14.1 + Math.random() * 0.4 : 12.3 + Math.random() * 0.4).toFixed(1)));
       }, 5000);
       return () => clearInterval(id);
     }
   }, []);
 
-  // Refs для доступа к актуальным значениям внутри таймера без его перезапуска
-  const totalKmRef   = useRef(totalKm);
-  const servicesRef  = useRef(services);
-  const historyRef   = useRef(history);
+  const totalKmRef  = useRef(totalKm);
+  const servicesRef = useRef(services);
+  const historyRef  = useRef(history);
   useEffect(() => { totalKmRef.current = totalKm; }, [totalKm]);
   useEffect(() => { servicesRef.current = services; }, [services]);
   useEffect(() => { historyRef.current = history; }, [history]);
 
-  // Считаем моточасы только при напряжении >= 14 В
   useEffect(() => {
     if (!engineRunning) return;
     const id = setInterval(() => {
@@ -131,221 +106,412 @@ export default function Index() {
     return () => clearInterval(id);
   }, [engineRunning]);
 
-  // Сохраняем данные при любом изменении
   useEffect(() => {
     saveState({ engineHours, totalKm, services, history });
   }, [engineHours, totalKm, services, history]);
 
-  const saveCounters = () => {
-    const h = Number(hoursInput) || 0;
-    const k = Number(kmInput) || 0;
-    setEngineHours(h);
-    setTotalKm(k);
-  };
-
   const resetService = (s: Service) => {
-    setServices((prev) =>
-      prev.map((x) => (x.id === s.id ? { ...x, lastHours: engineHours, lastKm: totalKm } : x)),
-    );
-    const today = new Date().toLocaleDateString('ru-RU');
-    setHistory((prev) => [
-      { id: `h${Date.now()}`, service: s.name, date: today, hours: engineHours, km: totalKm },
-      ...prev,
-    ]);
+    setServices((prev) => prev.map((x) => x.id === s.id ? { ...x, lastHours: engineHours, lastKm: totalKm } : x));
+    setHistory((prev) => [{ id: `h${Date.now()}`, service: s.name, date: new Date().toLocaleDateString('ru-RU'), hours: engineHours, km: totalKm }, ...prev]);
   };
 
-  const getProgress = (s: Service) => {
-    const byHours = (engineHours - s.lastHours) / s.intervalHours;
-    const byKm    = (totalKm - s.lastKm) / s.intervalKm;
-    return Math.min(Math.max(Math.max(byHours, byKm), 0), 1);
-  };
+  const getProgress = (s: Service) => Math.min(Math.max(Math.max(
+    (engineHours - s.lastHours) / s.intervalHours,
+    (totalKm - s.lastKm) / s.intervalKm
+  ), 0), 1);
+
+  const oil = services.find(s => s.id === 'oil')!;
+  const oilProgress = getProgress(oil);
+  const oilDanger   = oilProgress >= 0.85;
 
   return (
-    <div className="min-h-screen text-foreground px-5 py-6 md:px-10 md:py-8 max-w-5xl mx-auto">
+    <div className="relative w-full h-full flex overflow-hidden select-none" style={{ background: '#080808' }}>
 
-      {/* Header */}
-      <header className="animate-fade-in mb-8">
-        <div className="glow-line w-full mb-6 animate-glow-pulse" />
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-wide uppercase">
-              Сервис<span className="text-primary">·</span>Авто
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1 font-light tracking-wider">
-              Бортовой компьютер обслуживания
-            </p>
-          </div>
-          <div className={`w-12 h-12 rounded-full border grid place-items-center transition-all ${
-            engineRunning ? 'border-primary red-glow animate-glow-pulse' : 'border-border'
-          }`}>
-            <Icon name="Power" className={engineRunning ? 'text-primary' : 'text-muted-foreground'} size={22} />
+      {/* Фоновые горизонтальные линии на весь экран */}
+      <div className="perspective-lines" />
+
+      {/* Левая панель */}
+      <div className="left-panel relative z-10 flex flex-col" style={{ width: 220, minWidth: 220 }}>
+
+        {/* Логотип/заголовок */}
+        <div className="px-4 pt-5 pb-3 border-b border-white/5">
+          <div className="font-display text-xs tracking-[0.25em] uppercase text-white/30 mb-1">Бортовой</div>
+          <div className="font-display text-lg tracking-[0.15em] uppercase text-white/80">
+            Сервис<span className="text-primary">·</span>Авто
           </div>
         </div>
 
-        {/* Статус напряжения */}
-        <div className="mt-5 rounded-2xl bg-card border border-border p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Icon
-              name={engineRunning ? 'Zap' : 'ZapOff'}
-              size={20}
-              className={engineRunning ? 'text-primary' : 'text-muted-foreground'}
-            />
-            <div>
-              <p className="text-sm font-medium">
-                {engineRunning ? 'Моточасы записываются' : 'Запись остановлена'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {IS_ANDROID
-                  ? (engineRunning ? 'Генератор заряжает — двигатель работает' : 'Ожидание ACC/BAT ≥ 14.0 В')
-                  : 'Браузер: симуляция (напр. меняется авто)'}
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className={`font-display text-2xl tracking-wide ${engineRunning ? 'text-primary' : 'text-muted-foreground'}`}>
-              {voltage.toFixed(1)}<span className="text-sm ml-0.5">В</span>
-            </p>
-            <p className="text-[10px] text-muted-foreground tracking-widest uppercase">порог 14.0 В</p>
-          </div>
+        {/* Напряжение */}
+        <div className="px-4 py-3 border-b border-white/5 flex items-center gap-2">
+          <Icon name={engineRunning ? 'Zap' : 'ZapOff'} size={14} className={engineRunning ? 'text-primary' : 'text-white/25'} />
+          <span className="text-[11px] tracking-widest uppercase" style={{ color: engineRunning ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)' }}>
+            {engineRunning ? 'Двигатель' : 'Стоянка'}
+          </span>
+          <span className={`ml-auto font-display text-sm ${engineRunning ? 'text-primary' : 'text-white/25'}`}>
+            {voltage.toFixed(1)}В
+          </span>
         </div>
-      </header>
 
-      {/* Счётчики */}
-      <section className="grid grid-cols-2 gap-4 mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        <CounterCard icon="Gauge"      label="Моточасы"   value={engineHours} unit="ч" />
-        <CounterCard icon="Navigation" label="Пробег GPS" value={totalKm}     unit="км" />
-        <Dialog>
-          <DialogTrigger asChild>
-            <button className="col-span-2 flex items-center justify-center gap-2 py-3 rounded-2xl border border-border bg-card hover:border-primary/60 transition-colors text-sm tracking-wide">
-              <Icon name="SlidersHorizontal" size={16} className="text-primary" />
-              Скорректировать показания вручную
-            </button>
-          </DialogTrigger>
-          <DialogContent className="bg-popover border-border">
-            <DialogHeader>
-              <DialogTitle className="font-display uppercase tracking-wide">Корректировка</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Моточасы</Label>
-                <Input value={hoursInput} onChange={(e) => setHoursInput(e.target.value)} inputMode="numeric" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Пробег GPS, км</Label>
-                <Input value={kmInput} onChange={(e) => setKmInput(e.target.value)} inputMode="numeric" />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={saveCounters} className="w-full red-glow">Сохранить</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </section>
-
-      {/* Регламент */}
-      <section className="mb-10 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-        <SectionTitle icon="Wrench" title="Регламент обслуживания" />
-        <div className="space-y-4">
-          {services.map((s) => {
-            const progress    = getProgress(s);
-            const remainHours = Math.max(s.intervalHours - (engineHours - s.lastHours), 0);
-            const remainKm    = Math.max(s.intervalKm - (totalKm - s.lastKm), 0);
-            const danger      = progress >= 0.85;
+        {/* Меню */}
+        <nav className="flex-1 py-2">
+          {MENU_ITEMS.map((item) => {
+            const svc = services.find(s => s.id === item.id);
+            const prog = svc ? getProgress(svc) : null;
+            const warn = prog !== null && prog >= 0.85;
             return (
-              <div key={s.id} className="rounded-2xl bg-card border border-border p-5 red-glow">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-11 h-11 rounded-xl grid place-items-center border ${danger ? 'border-primary text-primary' : 'border-border text-muted-foreground'}`}>
-                      <Icon name={s.icon} size={20} />
-                    </div>
-                    <div>
-                      <p className="font-display text-lg tracking-wide">{s.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Осталось {remainHours} ч · {remainKm.toLocaleString('ru-RU')} км
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => resetService(s)}
-                    className="text-xs px-3 py-2 rounded-lg border border-primary/40 text-primary hover:bg-primary/10 transition-colors"
-                  >
-                    Заменено
-                  </button>
+              <div
+                key={item.id}
+                className={`menu-row ${screen === item.id ? 'active' : ''}`}
+                onClick={() => setScreen(item.id)}
+              >
+                <Icon name={item.icon} size={15} className={warn ? 'text-primary' : screen === item.id ? 'text-white/80' : 'text-white/30'} />
+                <span className="label">{item.label}</span>
+                {warn && <span className="text-primary text-[10px] font-display tracking-wider">!</span>}
+                {prog !== null && (
+                  <span className={`text-[11px] font-display ${warn ? 'text-primary' : 'text-white/30'}`}>
+                    {Math.round(prog * 100)}%
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        {/* Моточасы и пробег внизу */}
+        <div className="border-t border-white/5 px-4 py-3 space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] tracking-widest uppercase text-white/30">Моточасы</span>
+            <span className="font-display text-sm text-white/70">{engineHours.toLocaleString('ru-RU')} ч</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] tracking-widest uppercase text-white/30">GPS пробег</span>
+            <span className="font-display text-sm text-white/70">{totalKm.toLocaleString('ru-RU')} км</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Центральная область */}
+      <div className="relative flex-1 flex flex-col overflow-hidden">
+
+        {/* Красная полоса — точно как на картинке */}
+        <div className="relative z-20 mt-[42px]">
+          <div className="red-stripe animate-glow-pulse" />
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', marginTop: 3 }} />
+        </div>
+
+        {/* Основной контент: диск слева + раздел справа */}
+        <div className="flex-1 flex items-center z-10 relative px-6 gap-8">
+
+          {/* ДИСК — кнопка возврата на главный экран */}
+          <div
+            className={`disc-btn ${screen === 'main' ? 'active' : ''}`}
+            onClick={() => setScreen('main')}
+          >
+            <span className="disc-icon">
+              <Icon name="Home" size={20} className="text-white/60" />
+            </span>
+          </div>
+
+          {/* Разделитель */}
+          <div style={{ width: 1, height: 200, background: 'linear-gradient(180deg, transparent, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0.08) 70%, transparent)' }} />
+
+          {/* Правый контент — зависит от screen */}
+          <div className="flex-1 h-full flex flex-col justify-center py-6 animate-fade-in" key={screen}>
+            {screen === 'main' && <MainScreen engineHours={engineHours} totalKm={totalKm} engineRunning={engineRunning} voltage={voltage} services={services} getProgress={getProgress} />}
+            {(screen === 'oil' || screen === 'filter' || screen === 'brakes') && (
+              <ServiceScreen
+                service={services.find(s => s.id === screen)!}
+                engineHours={engineHours}
+                totalKm={totalKm}
+                progress={getProgress(services.find(s => s.id === screen)!)}
+                onReset={() => resetService(services.find(s => s.id === screen)!)}
+              />
+            )}
+            {screen === 'history' && <HistoryScreen history={history} />}
+            {screen === 'settings' && (
+              <SettingsScreen
+                hoursInput={hoursInput} setHoursInput={setHoursInput}
+                kmInput={kmInput} setKmInput={setKmInput}
+                onSave={() => { setEngineHours(Number(hoursInput) || 0); setTotalKm(Number(kmInput) || 0); }}
+                services={services} setServices={setServices}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Нижние линии (сходятся к правому краю — как на картинке) */}
+        <div className="absolute bottom-0 right-0 pointer-events-none" style={{ width: '60%', height: '45%' }}>
+          {[...Array(8)].map((_, i) => (
+            <div key={i} style={{
+              position: 'absolute',
+              bottom: `${i * 14}px`,
+              left: 0, right: 0,
+              height: 1,
+              background: `linear-gradient(90deg, transparent, rgba(255,255,255,${0.015 + i * 0.004}) 30%, rgba(255,255,255,${0.03 + i * 0.005}))`,
+              transform: `perspective(600px) rotateX(${i * 2}deg)`,
+            }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Главный экран ─────────────────────────────────────────── */
+function MainScreen({ engineHours, totalKm, engineRunning, voltage, services, getProgress }: {
+  engineHours: number; totalKm: number; engineRunning: boolean; voltage: number;
+  services: Service[]; getProgress: (s: Service) => number;
+}) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="font-display text-[10px] tracking-[0.3em] uppercase text-white/30 mb-3">Состояние систем</div>
+        <div className="space-y-3">
+          {services.map(s => {
+            const p = getProgress(s);
+            const danger = p >= 0.85;
+            return (
+              <div key={s.id}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-display text-xs tracking-widest uppercase" style={{ color: danger ? '#e82020' : 'rgba(255,255,255,0.5)' }}>{s.name}</span>
+                  <span className="font-display text-xs" style={{ color: danger ? '#e82020' : 'rgba(255,255,255,0.35)' }}>{Math.round(p * 100)}%</span>
                 </div>
-                <div className="h-2 rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${progress * 100}%`,
-                      background: danger
-                        ? 'linear-gradient(90deg, hsl(0 84% 45%), hsl(0 90% 55%))'
-                        : 'linear-gradient(90deg, hsl(0 0% 35%), hsl(0 0% 55%))',
-                      boxShadow: danger ? '0 0 12px hsla(0,84%,50%,0.7)' : 'none',
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between mt-2 text-[11px] text-muted-foreground tracking-wider">
-                  <span>{Math.round(progress * 100)}% ресурса</span>
-                  <span>интервал {s.intervalHours} ч / {s.intervalKm.toLocaleString('ru-RU')} км</span>
+                <div style={{ height: 2, background: 'rgba(255,255,255,0.07)', borderRadius: 1 }}>
+                  <div style={{
+                    height: '100%', borderRadius: 1,
+                    width: `${p * 100}%`,
+                    background: danger
+                      ? 'linear-gradient(90deg, #7a0000, #e82020)'
+                      : 'linear-gradient(90deg, #2a2a2a, #555)',
+                    boxShadow: danger ? '0 0 8px rgba(220,20,20,0.7)' : 'none',
+                    transition: 'width 0.5s ease',
+                  }} />
                 </div>
               </div>
             );
           })}
         </div>
-      </section>
+      </div>
 
-      {/* История */}
-      <section className="animate-fade-in pb-8" style={{ animationDelay: '0.3s' }}>
-        <SectionTitle icon="History" title="История замен" />
-        {history.length === 0 ? (
-          <div className="rounded-2xl bg-card border border-border p-8 text-center text-muted-foreground text-sm">
-            История пока пуста — нажмите «Заменено» после первой замены
-          </div>
-        ) : (
-          <div className="rounded-2xl bg-card border border-border divide-y divide-border overflow-hidden">
-            {history.map((h) => (
-              <div key={h.id} className="flex items-center justify-between px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <Icon name="CheckCircle2" size={18} className="text-primary" />
-                  <div>
-                    <p className="text-sm">{h.service}</p>
-                    <p className="text-xs text-muted-foreground">{h.date}</p>
-                  </div>
-                </div>
-                <div className="text-right text-xs text-muted-foreground">
-                  <p>{h.hours} ч</p>
-                  <p>{h.km.toLocaleString('ru-RU')} км</p>
-                </div>
+      <div style={{ height: 1, background: 'rgba(255,255,255,0.05)' }} />
+
+      <div className="grid grid-cols-2 gap-4">
+        <StatBox label="Моточасы" value={`${engineHours.toLocaleString('ru-RU')} ч`} active={engineRunning} />
+        <StatBox label="GPS пробег" value={`${totalKm.toLocaleString('ru-RU')} км`} />
+        <StatBox label="Напряжение" value={`${voltage.toFixed(1)} В`} active={engineRunning} warn={!engineRunning} />
+        <StatBox label="Двигатель" value={engineRunning ? 'Работает' : 'Заглушён'} active={engineRunning} warn={!engineRunning} />
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value, active, warn }: { label: string; value: string; active?: boolean; warn?: boolean }) {
+  return (
+    <div style={{
+      padding: '10px 14px',
+      border: `1px solid ${active ? 'rgba(180,20,20,0.3)' : 'rgba(255,255,255,0.06)'}`,
+      borderRadius: 8,
+      background: active ? 'rgba(120,0,0,0.06)' : 'rgba(255,255,255,0.02)',
+    }}>
+      <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>{label}</div>
+      <div className="font-display text-base tracking-wide" style={{ color: warn ? 'rgba(255,255,255,0.25)' : active ? '#e06060' : 'rgba(255,255,255,0.75)' }}>{value}</div>
+    </div>
+  );
+}
+
+/* ── Экран сервиса ─────────────────────────────────────────── */
+function ServiceScreen({ service, engineHours, totalKm, progress, onReset }: {
+  service: Service; engineHours: number; totalKm: number; progress: number; onReset: () => void;
+}) {
+  const danger      = progress >= 0.85;
+  const remainHours = Math.max(service.intervalHours - (engineHours - service.lastHours), 0);
+  const remainKm    = Math.max(service.intervalKm - (totalKm - service.lastKm), 0);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="font-display text-[10px] tracking-[0.3em] uppercase text-white/30 mb-1">Обслуживание</div>
+        <div className="font-display text-2xl tracking-wider uppercase" style={{ color: danger ? '#e82020' : 'rgba(255,255,255,0.85)' }}>
+          {service.name}
+        </div>
+      </div>
+
+      {/* Большой прогресс-бар */}
+      <div>
+        <div className="flex justify-between mb-2">
+          <span className="text-[10px] tracking-widest uppercase text-white/30">Ресурс использован</span>
+          <span className={`font-display text-lg ${danger ? 'text-primary' : 'text-white/60'}`}>{Math.round(progress * 100)}%</span>
+        </div>
+        <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2 }}>
+          <div style={{
+            height: '100%', borderRadius: 2,
+            width: `${progress * 100}%`,
+            background: danger ? 'linear-gradient(90deg, #7a0000, #e82020)' : 'linear-gradient(90deg, #2a2a2a, #666)',
+            boxShadow: danger ? '0 0 12px rgba(220,20,20,0.8)' : 'none',
+            transition: 'width 0.5s ease',
+          }} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <InfoCell label="Осталось часов" value={`${remainHours} ч`} warn={danger} />
+        <InfoCell label="Осталось км" value={`${remainKm.toLocaleString('ru-RU')} км`} warn={danger} />
+        <InfoCell label="Интервал" value={`${service.intervalHours} ч`} />
+        <InfoCell label="Интервал км" value={`${service.intervalKm.toLocaleString('ru-RU')} км`} />
+      </div>
+
+      <button
+        onClick={onReset}
+        style={{
+          padding: '10px 24px',
+          border: '1px solid rgba(180,20,20,0.5)',
+          borderRadius: 8,
+          background: 'rgba(120,0,0,0.12)',
+          color: '#e06060',
+          fontFamily: 'Oswald, sans-serif',
+          fontSize: 12,
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(180,0,0,0.2)')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'rgba(120,0,0,0.12)')}
+      >
+        ✓ Замена выполнена — сбросить
+      </button>
+    </div>
+  );
+}
+
+function InfoCell({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <div style={{ padding: '8px 12px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, background: 'rgba(255,255,255,0.02)' }}>
+      <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: 'rgba(255,255,255,0.28)' }}>{label}</div>
+      <div className="font-display text-sm tracking-wide" style={{ color: warn ? '#e82020' : 'rgba(255,255,255,0.7)' }}>{value}</div>
+    </div>
+  );
+}
+
+/* ── История ───────────────────────────────────────────────── */
+function HistoryScreen({ history }: { history: HistoryItem[] }) {
+  return (
+    <div>
+      <div className="font-display text-[10px] tracking-[0.3em] uppercase text-white/30 mb-4">История замен</div>
+      {history.length === 0 ? (
+        <div className="text-sm text-white/25 tracking-wider">Замены ещё не выполнялись</div>
+      ) : (
+        <div className="space-y-2 overflow-y-auto" style={{ maxHeight: 280 }}>
+          {history.map((h) => (
+            <div key={h.id} style={{ padding: '8px 12px', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, background: 'rgba(255,255,255,0.02)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div className="font-display text-sm tracking-wider text-white/75">{h.service}</div>
+                <div className="text-[11px] text-white/30 mt-0.5">{h.date}</div>
               </div>
-            ))}
+              <div className="text-right">
+                <div className="font-display text-xs text-white/45">{h.hours} ч</div>
+                <div className="font-display text-xs text-white/30">{h.km.toLocaleString('ru-RU')} км</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Настройки ─────────────────────────────────────────────── */
+function SettingsScreen({ hoursInput, setHoursInput, kmInput, setKmInput, onSave, services, setServices }: {
+  hoursInput: string; setHoursInput: (v: string) => void;
+  kmInput: string; setKmInput: (v: string) => void;
+  onSave: () => void;
+  services: Service[]; setServices: (fn: (prev: Service[]) => Service[]) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="font-display text-[10px] tracking-[0.3em] uppercase text-white/30">Корректировка показаний</div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <div className="text-[10px] tracking-widest uppercase text-white/30 mb-2">Моточасы</div>
+          <input
+            value={hoursInput}
+            onChange={e => setHoursInput(e.target.value)}
+            inputMode="numeric"
+            style={{
+              width: '100%', padding: '8px 12px',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 6, color: 'rgba(255,255,255,0.8)',
+              fontFamily: 'Oswald, sans-serif', fontSize: 16, letterSpacing: '0.05em',
+              outline: 'none',
+            }}
+          />
+        </div>
+        <div>
+          <div className="text-[10px] tracking-widest uppercase text-white/30 mb-2">Пробег GPS, км</div>
+          <input
+            value={kmInput}
+            onChange={e => setKmInput(e.target.value)}
+            inputMode="numeric"
+            style={{
+              width: '100%', padding: '8px 12px',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 6, color: 'rgba(255,255,255,0.8)',
+              fontFamily: 'Oswald, sans-serif', fontSize: 16, letterSpacing: '0.05em',
+              outline: 'none',
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="font-display text-[10px] tracking-[0.3em] uppercase text-white/30 pt-2">Интервалы замены</div>
+      <div className="space-y-3">
+        {services.map(s => (
+          <div key={s.id} style={{ padding: '10px 14px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
+            <div className="font-display text-xs tracking-wider text-white/50 uppercase mb-2">{s.name}</div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <div className="text-[9px] text-white/25 mb-1">Часы</div>
+                <input
+                  value={s.intervalHours}
+                  onChange={e => setServices(prev => prev.map(x => x.id === s.id ? { ...x, intervalHours: Number(e.target.value) || x.intervalHours } : x))}
+                  inputMode="numeric"
+                  style={{ width: '100%', padding: '5px 8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, color: 'rgba(255,255,255,0.7)', fontFamily: 'Oswald, sans-serif', fontSize: 13, outline: 'none' }}
+                />
+              </div>
+              <div className="flex-1">
+                <div className="text-[9px] text-white/25 mb-1">Км</div>
+                <input
+                  value={s.intervalKm}
+                  onChange={e => setServices(prev => prev.map(x => x.id === s.id ? { ...x, intervalKm: Number(e.target.value) || x.intervalKm } : x))}
+                  inputMode="numeric"
+                  style={{ width: '100%', padding: '5px 8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, color: 'rgba(255,255,255,0.7)', fontFamily: 'Oswald, sans-serif', fontSize: 13, outline: 'none' }}
+                />
+              </div>
+            </div>
           </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function CounterCard({ icon, label, value, unit }: { icon: string; label: string; value: number; unit: string }) {
-  return (
-    <div className="rounded-2xl bg-card border border-border p-5 red-glow">
-      <div className="flex items-center gap-2 text-muted-foreground text-xs tracking-widest uppercase mb-2">
-        <Icon name={icon} size={14} className="text-primary" />
-        {label}
+        ))}
       </div>
-      <div className="font-display text-3xl md:text-4xl tracking-wide">
-        {value.toLocaleString('ru-RU')}
-        <span className="text-base text-muted-foreground ml-1 font-body">{unit}</span>
-      </div>
-    </div>
-  );
-}
 
-function SectionTitle({ icon, title }: { icon: string; title: string }) {
-  return (
-    <div className="flex items-center gap-2 mb-4">
-      <Icon name={icon} size={18} className="text-primary" />
-      <h2 className="font-display text-xl tracking-wide uppercase">{title}</h2>
-      <div className="flex-1 h-px bg-border ml-2" />
+      <button
+        onClick={onSave}
+        style={{
+          padding: '10px 28px',
+          border: '1px solid rgba(180,20,20,0.5)',
+          borderRadius: 8,
+          background: 'rgba(120,0,0,0.15)',
+          color: '#e06060',
+          fontFamily: 'Oswald, sans-serif',
+          fontSize: 12,
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+      >
+        Сохранить
+      </button>
     </div>
   );
 }
