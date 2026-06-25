@@ -91,11 +91,68 @@
 }
 
 @layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 92%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 92%;
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 92%;
+    --primary: 0 84% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 92%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 72% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 0 84% 50%;
+    --radius: 1rem;
+  }
+}
+
+@layer base {
   * {
     @apply border-border;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-body;
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 80% 60%,
+        hsla(0, 84%, 30%, 0.12),
+        transparent 70%
+      ),
+      repeating-linear-gradient(
+        180deg,
+        transparent,
+        transparent 58px,
+        hsla(0, 0%, 100%, 0.025) 58px,
+        hsla(0, 0%, 100%, 0.025) 59px
+      );
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .glow-line {
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(0 84% 50%),
+      transparent
+    );
+    box-shadow: 0 0 12px 2px hsla(0, 84%, 50%, 0.6);
+  }
+  .red-glow {
+    box-shadow:
+      0 0 30px hsla(0, 84%, 40%, 0.25),
+      inset 0 1px 0 hsla(0, 0%, 100%, 0.06);
   }
 }
