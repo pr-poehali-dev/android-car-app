@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 import {
   Dialog,
@@ -42,14 +42,35 @@ const initialHistory: HistoryItem[] = [
   { id: 'h3', service: 'Тормозные колодки', date: '18.10.2025', hours: 700, km: 28000 },
 ];
 
+const VOLTAGE_THRESHOLD = 14;
+
 export default function Index() {
   const [engineHours, setEngineHours] = useState(1342);
   const [totalKm, setTotalKm] = useState(46820);
   const [services, setServices] = useState(initialServices);
   const [history, setHistory] = useState(initialHistory);
 
+  const [voltage, setVoltage] = useState(12.4);
+  const engineRunning = voltage >= VOLTAGE_THRESHOLD;
+  const fractionRef = useRef(0);
+
   const [hoursInput, setHoursInput] = useState(String(engineHours));
   const [kmInput, setKmInput] = useState(String(totalKm));
+
+  // Подсчёт моточасов: тикаем только когда борт-напряжение >= 14 В (генератор заряжает = двигатель работает)
+  useEffect(() => {
+    if (!engineRunning) return;
+    const id = setInterval(() => {
+      // 1 секунда реального времени = 1 моточас (ускорено для демо). В проде: / 3600
+      fractionRef.current += 1;
+      if (fractionRef.current >= 1) {
+        const whole = Math.floor(fractionRef.current);
+        fractionRef.current -= whole;
+        setEngineHours((h) => h + whole);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [engineRunning]);
 
   const saveCounters = () => {
     setEngineHours(Number(hoursInput) || 0);
@@ -88,8 +109,45 @@ export default function Index() {
               Бортовой компьютер обслуживания
             </p>
           </div>
-          <div className="w-12 h-12 rounded-full border border-primary/50 grid place-items-center red-glow">
-            <Icon name="Power" className="text-primary" size={22} />
+          <button
+            onClick={() => setVoltage((v) => (v >= VOLTAGE_THRESHOLD ? 12.4 : 14.2))}
+            className={`w-12 h-12 rounded-full border grid place-items-center transition-all ${
+              engineRunning ? 'border-primary red-glow animate-glow-pulse' : 'border-border'
+            }`}
+            title="Симуляция: запуск/остановка двигателя"
+          >
+            <Icon name="Power" className={engineRunning ? 'text-primary' : 'text-muted-foreground'} size={22} />
+          </button>
+        </div>
+
+        {/* Статус записи моточасов */}
+        <div className="mt-5 rounded-2xl bg-card border border-border p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Icon
+              name={engineRunning ? 'Zap' : 'ZapOff'}
+              size={20}
+              className={engineRunning ? 'text-primary' : 'text-muted-foreground'}
+            />
+            <div>
+              <p className="text-sm font-medium">
+                {engineRunning ? 'Запись моточасов активна' : 'Запись остановлена'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {engineRunning
+                  ? 'Двигатель работает — генератор заряжает'
+                  : 'Ожидание напряжения 14 В'}
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p
+              className={`font-display text-2xl tracking-wide ${
+                engineRunning ? 'text-primary' : 'text-muted-foreground'
+              }`}
+            >
+              {voltage.toFixed(1)}<span className="text-sm ml-0.5">В</span>
+            </p>
+            <p className="text-[10px] text-muted-foreground tracking-widest uppercase">порог 14.0 В</p>
           </div>
         </div>
       </header>
