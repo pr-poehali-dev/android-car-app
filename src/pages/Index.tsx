@@ -12,6 +12,19 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
+declare global {
+  interface Window {
+    AndroidBridge?: {
+      getVoltage: () => number;
+      getGpsKm: () => number;
+      saveData: (json: string) => void;
+      loadData: () => string;
+    };
+    onVoltageUpdate?: (v: number) => void;
+    onGpsKmUpdate?: (km: number) => void;
+  }
+}
+
 interface Service {
   id: string;
   name: string;
@@ -30,51 +43,104 @@ interface HistoryItem {
   km: number;
 }
 
-const initialServices: Service[] = [
-  { id: 'oil', name: 'Моторное масло', icon: 'Droplet', intervalHours: 250, intervalKm: 10000, lastHours: 1180, lastKm: 42500 },
-  { id: 'filter', name: 'Воздушный фильтр', icon: 'Wind', intervalHours: 500, intervalKm: 20000, lastHours: 980, lastKm: 38000 },
-  { id: 'brakes', name: 'Тормозные колодки', icon: 'Disc', intervalHours: 750, intervalKm: 30000, lastHours: 700, lastKm: 28000 },
-];
-
-const initialHistory: HistoryItem[] = [
-  { id: 'h1', service: 'Моторное масло', date: '12.03.2026', hours: 1180, km: 42500 },
-  { id: 'h2', service: 'Воздушный фильтр', date: '04.01.2026', hours: 980, km: 38000 },
-  { id: 'h3', service: 'Тормозные колодки', date: '18.10.2025', hours: 700, km: 28000 },
-];
-
 const VOLTAGE_THRESHOLD = 14;
+const IS_ANDROID = typeof window !== 'undefined' && !!window.AndroidBridge;
+
+const DEFAULT_SERVICES: Service[] = [
+  { id: 'oil',    name: 'Моторное масло',    icon: 'Droplet', intervalHours: 250, intervalKm: 10000, lastHours: 0, lastKm: 0 },
+  { id: 'filter', name: 'Воздушный фильтр',  icon: 'Wind',    intervalHours: 500, intervalKm: 20000, lastHours: 0, lastKm: 0 },
+  { id: 'brakes', name: 'Тормозные колодки', icon: 'Disc',    intervalHours: 750, intervalKm: 30000, lastHours: 0, lastKm: 0 },
+];
+
+function loadState() {
+  try {
+    const raw = IS_ANDROID
+      ? window.AndroidBridge!.loadData()
+      : localStorage.getItem('car_service_data');
+    if (raw) return JSON.parse(raw);
+  } catch (e) { void e; }
+  return null;
+}
+
+function saveState(data: object) {
+  const json = JSON.stringify(data);
+  if (IS_ANDROID) {
+    window.AndroidBridge!.saveData(json);
+  } else {
+    localStorage.setItem('car_service_data', json);
+  }
+}
 
 export default function Index() {
-  const [engineHours, setEngineHours] = useState(1342);
-  const [totalKm, setTotalKm] = useState(46820);
-  const [services, setServices] = useState(initialServices);
-  const [history, setHistory] = useState(initialHistory);
+  const saved = loadState();
 
-  const [voltage, setVoltage] = useState(12.4);
-  const engineRunning = voltage >= VOLTAGE_THRESHOLD;
-  const fractionRef = useRef(0);
+  const [engineHours, setEngineHours] = useState<number>(saved?.engineHours ?? 0);
+  const [totalKm, setTotalKm]         = useState<number>(saved?.totalKm ?? 0);
+  const [services, setServices]       = useState<Service[]>(saved?.services ?? DEFAULT_SERVICES);
+  const [history, setHistory]         = useState<HistoryItem[]>(saved?.history ?? []);
 
-  const [hoursInput, setHoursInput] = useState(String(engineHours));
-  const [kmInput, setKmInput] = useState(String(totalKm));
+  const [voltage, setVoltage]         = useState<number>(12.4);
+  const engineRunning                 = voltage >= VOLTAGE_THRESHOLD;
+  const secondsRef                    = useRef<number>(0);
 
-  // Подсчёт моточасов: тикаем только когда борт-напряжение >= 14 В (генератор заряжает = двигатель работает)
+  const [hoursInput, setHoursInput]   = useState(String(saved?.engineHours ?? 0));
+  const [kmInput, setKmInput]         = useState(String(saved?.totalKm ?? 0));
+
+  // Получаем напряжение: от Android через callback или polling
+  useEffect(() => {
+    if (IS_ANDROID) {
+      // Android вызывает window.onVoltageUpdate(v) при каждом измерении
+      window.onVoltageUpdate = (v: number) => setVoltage(v);
+      window.onGpsKmUpdate   = (km: number) => setTotalKm(km);
+      return () => {
+        window.onVoltageUpdate = undefined;
+        window.onGpsKmUpdate   = undefined;
+      };
+    } else {
+      // В браузере — симуляция для разработки
+      const id = setInterval(() => {
+        const v = parseFloat((Math.random() > 0.3 ? 14.1 + Math.random() * 0.4 : 12.3 + Math.random() * 0.4).toFixed(1));
+        setVoltage(v);
+      }, 5000);
+      return () => clearInterval(id);
+    }
+  }, []);
+
+  // Refs для доступа к актуальным значениям внутри таймера без его перезапуска
+  const totalKmRef   = useRef(totalKm);
+  const servicesRef  = useRef(services);
+  const historyRef   = useRef(history);
+  useEffect(() => { totalKmRef.current = totalKm; }, [totalKm]);
+  useEffect(() => { servicesRef.current = services; }, [services]);
+  useEffect(() => { historyRef.current = history; }, [history]);
+
+  // Считаем моточасы только при напряжении >= 14 В
   useEffect(() => {
     if (!engineRunning) return;
     const id = setInterval(() => {
-      // 1 секунда реального времени = 1 моточас (ускорено для демо). В проде: / 3600
-      fractionRef.current += 1;
-      if (fractionRef.current >= 1) {
-        const whole = Math.floor(fractionRef.current);
-        fractionRef.current -= whole;
-        setEngineHours((h) => h + whole);
+      secondsRef.current += 1;
+      if (secondsRef.current >= 3600) {
+        secondsRef.current -= 3600;
+        setEngineHours((h) => {
+          const next = h + 1;
+          saveState({ engineHours: next, totalKm: totalKmRef.current, services: servicesRef.current, history: historyRef.current });
+          return next;
+        });
       }
     }, 1000);
     return () => clearInterval(id);
   }, [engineRunning]);
 
+  // Сохраняем данные при любом изменении
+  useEffect(() => {
+    saveState({ engineHours, totalKm, services, history });
+  }, [engineHours, totalKm, services, history]);
+
   const saveCounters = () => {
-    setEngineHours(Number(hoursInput) || 0);
-    setTotalKm(Number(kmInput) || 0);
+    const h = Number(hoursInput) || 0;
+    const k = Number(kmInput) || 0;
+    setEngineHours(h);
+    setTotalKm(k);
   };
 
   const resetService = (s: Service) => {
@@ -90,13 +156,13 @@ export default function Index() {
 
   const getProgress = (s: Service) => {
     const byHours = (engineHours - s.lastHours) / s.intervalHours;
-    const byKm = (totalKm - s.lastKm) / s.intervalKm;
-    const pct = Math.max(byHours, byKm);
-    return Math.min(Math.max(pct, 0), 1);
+    const byKm    = (totalKm - s.lastKm) / s.intervalKm;
+    return Math.min(Math.max(Math.max(byHours, byKm), 0), 1);
   };
 
   return (
     <div className="min-h-screen text-foreground px-5 py-6 md:px-10 md:py-8 max-w-5xl mx-auto">
+
       {/* Header */}
       <header className="animate-fade-in mb-8">
         <div className="glow-line w-full mb-6 animate-glow-pulse" />
@@ -109,18 +175,14 @@ export default function Index() {
               Бортовой компьютер обслуживания
             </p>
           </div>
-          <button
-            onClick={() => setVoltage((v) => (v >= VOLTAGE_THRESHOLD ? 12.4 : 14.2))}
-            className={`w-12 h-12 rounded-full border grid place-items-center transition-all ${
-              engineRunning ? 'border-primary red-glow animate-glow-pulse' : 'border-border'
-            }`}
-            title="Симуляция: запуск/остановка двигателя"
-          >
+          <div className={`w-12 h-12 rounded-full border grid place-items-center transition-all ${
+            engineRunning ? 'border-primary red-glow animate-glow-pulse' : 'border-border'
+          }`}>
             <Icon name="Power" className={engineRunning ? 'text-primary' : 'text-muted-foreground'} size={22} />
-          </button>
+          </div>
         </div>
 
-        {/* Статус записи моточасов */}
+        {/* Статус напряжения */}
         <div className="mt-5 rounded-2xl bg-card border border-border p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Icon
@@ -130,21 +192,17 @@ export default function Index() {
             />
             <div>
               <p className="text-sm font-medium">
-                {engineRunning ? 'Запись моточасов активна' : 'Запись остановлена'}
+                {engineRunning ? 'Моточасы записываются' : 'Запись остановлена'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {engineRunning
-                  ? 'Двигатель работает — генератор заряжает'
-                  : 'Ожидание напряжения 14 В'}
+                {IS_ANDROID
+                  ? (engineRunning ? 'Генератор заряжает — двигатель работает' : 'Ожидание ACC/BAT ≥ 14.0 В')
+                  : 'Браузер: симуляция (напр. меняется авто)'}
               </p>
             </div>
           </div>
           <div className="text-right">
-            <p
-              className={`font-display text-2xl tracking-wide ${
-                engineRunning ? 'text-primary' : 'text-muted-foreground'
-              }`}
-            >
+            <p className={`font-display text-2xl tracking-wide ${engineRunning ? 'text-primary' : 'text-muted-foreground'}`}>
               {voltage.toFixed(1)}<span className="text-sm ml-0.5">В</span>
             </p>
             <p className="text-[10px] text-muted-foreground tracking-widest uppercase">порог 14.0 В</p>
@@ -152,10 +210,10 @@ export default function Index() {
         </div>
       </header>
 
-      {/* Counters */}
+      {/* Счётчики */}
       <section className="grid grid-cols-2 gap-4 mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
-        <CounterCard icon="Gauge" label="Моточасы" value={engineHours} unit="ч" />
-        <CounterCard icon="Navigation" label="Пробег GPS" value={totalKm} unit="км" />
+        <CounterCard icon="Gauge"      label="Моточасы"   value={engineHours} unit="ч" />
+        <CounterCard icon="Navigation" label="Пробег GPS" value={totalKm}     unit="км" />
         <Dialog>
           <DialogTrigger asChild>
             <button className="col-span-2 flex items-center justify-center gap-2 py-3 rounded-2xl border border-border bg-card hover:border-primary/60 transition-colors text-sm tracking-wide">
@@ -184,15 +242,15 @@ export default function Index() {
         </Dialog>
       </section>
 
-      {/* Services */}
+      {/* Регламент */}
       <section className="mb-10 animate-fade-in" style={{ animationDelay: '0.2s' }}>
         <SectionTitle icon="Wrench" title="Регламент обслуживания" />
         <div className="space-y-4">
           {services.map((s) => {
-            const progress = getProgress(s);
+            const progress    = getProgress(s);
             const remainHours = Math.max(s.intervalHours - (engineHours - s.lastHours), 0);
-            const remainKm = Math.max(s.intervalKm - (totalKm - s.lastKm), 0);
-            const danger = progress >= 0.85;
+            const remainKm    = Math.max(s.intervalKm - (totalKm - s.lastKm), 0);
+            const danger      = progress >= 0.85;
             return (
               <div key={s.id} className="rounded-2xl bg-card border border-border p-5 red-glow">
                 <div className="flex items-center justify-between mb-4">
@@ -236,26 +294,32 @@ export default function Index() {
         </div>
       </section>
 
-      {/* History */}
+      {/* История */}
       <section className="animate-fade-in pb-8" style={{ animationDelay: '0.3s' }}>
         <SectionTitle icon="History" title="История замен" />
-        <div className="rounded-2xl bg-card border border-border divide-y divide-border overflow-hidden">
-          {history.map((h) => (
-            <div key={h.id} className="flex items-center justify-between px-5 py-4">
-              <div className="flex items-center gap-3">
-                <Icon name="CheckCircle2" size={18} className="text-primary" />
-                <div>
-                  <p className="text-sm">{h.service}</p>
-                  <p className="text-xs text-muted-foreground">{h.date}</p>
+        {history.length === 0 ? (
+          <div className="rounded-2xl bg-card border border-border p-8 text-center text-muted-foreground text-sm">
+            История пока пуста — нажмите «Заменено» после первой замены
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-card border border-border divide-y divide-border overflow-hidden">
+            {history.map((h) => (
+              <div key={h.id} className="flex items-center justify-between px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <Icon name="CheckCircle2" size={18} className="text-primary" />
+                  <div>
+                    <p className="text-sm">{h.service}</p>
+                    <p className="text-xs text-muted-foreground">{h.date}</p>
+                  </div>
+                </div>
+                <div className="text-right text-xs text-muted-foreground">
+                  <p>{h.hours} ч</p>
+                  <p>{h.km.toLocaleString('ru-RU')} км</p>
                 </div>
               </div>
-              <div className="text-right text-xs text-muted-foreground">
-                <p>{h.hours} ч</p>
-                <p>{h.km.toLocaleString('ru-RU')} км</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
