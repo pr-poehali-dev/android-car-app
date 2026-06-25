@@ -29,10 +29,11 @@ const VOLTAGE_THRESHOLD = 14;
 const IS_ANDROID = typeof window !== 'undefined' && !!window.AndroidBridge;
 
 const DEFAULT_SERVICES: Service[] = [
-  { id: 'oil',       name: 'Моторное масло',       icon: 'Droplet',  intervalHours: 250, intervalKm: 10000, lastHours: 0, lastKm: 0 },
-  { id: 'filter_eng',name: 'Фильтр двигателя',     icon: 'Wind',     intervalHours: 500, intervalKm: 20000, lastHours: 0, lastKm: 0 },
-  { id: 'filter_cab',name: 'Фильтр салона',        icon: 'AirVent',  intervalHours: 500, intervalKm: 15000, lastHours: 0, lastKm: 0 },
-  { id: 'brakes',    name: 'Тормозные колодки',    icon: 'Disc3',    intervalHours: 750, intervalKm: 30000, lastHours: 0, lastKm: 0 },
+  { id: 'oil',       name: 'Моторное масло',       icon: 'Droplet',  intervalHours: 250,  intervalKm: 10000, lastHours: 0, lastKm: 0 },
+  { id: 'filter_eng',name: 'Фильтр двигателя',     icon: 'Wind',     intervalHours: 500,  intervalKm: 20000, lastHours: 0, lastKm: 0 },
+  { id: 'filter_cab',name: 'Фильтр салона',        icon: 'AirVent',  intervalHours: 500,  intervalKm: 15000, lastHours: 0, lastKm: 0 },
+  { id: 'brakes',    name: 'Тормозные колодки',    icon: 'Disc3',    intervalHours: 750,  intervalKm: 30000, lastHours: 0, lastKm: 0 },
+  { id: 'spark',     name: 'Свечи зажигания',      icon: 'Flame',    intervalHours: 1000, intervalKm: 30000, lastHours: 0, lastKm: 0 },
 ];
 
 function loadState() {
@@ -47,13 +48,14 @@ function saveState(data: object) {
   if (IS_ANDROID) { window.AndroidBridge!.saveData(json); } else { localStorage.setItem('car_service_data', json); }
 }
 
-type Screen = 'main' | 'oil' | 'filter_eng' | 'filter_cab' | 'brakes' | 'voltage' | 'history' | 'settings';
+type Screen = 'main' | 'oil' | 'filter_eng' | 'filter_cab' | 'brakes' | 'spark' | 'voltage' | 'history' | 'settings';
 
 const MENU_ITEMS: { id: Screen; label: string; icon: string }[] = [
   { id: 'oil',        label: 'Моторное масло',    icon: 'Droplet' },
   { id: 'filter_eng', label: 'Фильтр двигателя',  icon: 'Wind' },
   { id: 'filter_cab', label: 'Фильтр салона',     icon: 'AirVent' },
   { id: 'brakes',     label: 'Тормозные колодки', icon: 'Disc3' },
+  { id: 'spark',      label: 'Свечи зажигания',   icon: 'Flame' },
   { id: 'voltage',    label: 'Напряжение сети',   icon: 'Zap' },
   { id: 'history',    label: 'История замен',      icon: 'History' },
   { id: 'settings',   label: 'Показания',          icon: 'SlidersHorizontal' },
@@ -221,7 +223,7 @@ export default function Index() {
           {/* Правый контент — зависит от screen */}
           <div className="flex-1 h-full flex flex-col justify-center py-6 animate-fade-in" key={screen}>
             {screen === 'main' && <MainScreen engineHours={engineHours} totalKm={totalKm} engineRunning={engineRunning} voltage={voltage} services={services} getProgress={getProgress} />}
-            {(screen === 'oil' || screen === 'filter_eng' || screen === 'filter_cab' || screen === 'brakes') && (
+            {(screen === 'oil' || screen === 'filter_eng' || screen === 'filter_cab' || screen === 'brakes' || screen === 'spark') && (
               <ServiceScreen
                 service={services.find(s => s.id === screen)!}
                 engineHours={engineHours}
@@ -266,7 +268,7 @@ function MainScreen({ engineHours, totalKm, engineRunning, voltage, services, ge
   engineHours: number; totalKm: number; engineRunning: boolean; voltage: number;
   services: Service[]; getProgress: (s: Service) => number;
 }) {
-  const ICONS: Record<string, string> = { oil: 'Droplet', filter_eng: 'Wind', filter_cab: 'AirVent', brakes: 'Disc3' };
+  const ICONS: Record<string, string> = { oil: 'Droplet', filter_eng: 'Wind', filter_cab: 'AirVent', brakes: 'Disc3', spark: 'Flame' };
 
   return (
     <div className="flex flex-col gap-4 h-full justify-center">
