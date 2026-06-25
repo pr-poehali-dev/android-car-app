@@ -262,45 +262,97 @@ function MainScreen({ engineHours, totalKm, engineRunning, voltage, services, ge
   engineHours: number; totalKm: number; engineRunning: boolean; voltage: number;
   services: Service[]; getProgress: (s: Service) => number;
 }) {
+  const ICONS: Record<string, string> = { oil: 'Droplet', filter: 'Wind', brakes: 'Disc3' };
+
   return (
-    <div className="space-y-5">
-      <div>
-        <div className="font-display text-[10px] tracking-[0.3em] uppercase text-white/30 mb-3">Состояние систем</div>
-        <div className="space-y-3">
-          {services.map(s => {
-            const p = getProgress(s);
-            const danger = p >= 0.85;
-            return (
-              <div key={s.id}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-display text-xs tracking-widest uppercase" style={{ color: danger ? '#e82020' : 'rgba(255,255,255,0.5)' }}>{s.name}</span>
-                  <span className="font-display text-xs" style={{ color: danger ? '#e82020' : 'rgba(255,255,255,0.35)' }}>{Math.round(p * 100)}%</span>
-                </div>
-                <div style={{ height: 2, background: 'rgba(255,255,255,0.07)', borderRadius: 1 }}>
-                  <div style={{
-                    height: '100%', borderRadius: 1,
-                    width: `${p * 100}%`,
-                    background: danger
-                      ? 'linear-gradient(90deg, #7a0000, #e82020)'
-                      : 'linear-gradient(90deg, #2a2a2a, #555)',
-                    boxShadow: danger ? '0 0 8px rgba(220,20,20,0.7)' : 'none',
-                    transition: 'width 0.5s ease',
-                  }} />
-                </div>
+    <div className="flex flex-col gap-4 h-full justify-center">
+
+      {/* Три карточки сервиса — горизонтально */}
+      <div className="font-display text-[10px] tracking-[0.3em] uppercase text-white/25">Состояние обслуживания</div>
+      <div className="flex gap-3">
+        {services.map(s => {
+          const p      = getProgress(s);
+          const danger = p >= 0.85;
+          const warn   = p >= 0.65 && !danger;
+          const remainH = Math.max(s.intervalHours - (engineHours - s.lastHours), 0);
+          const remainK = Math.max(s.intervalKm - (totalKm - s.lastKm), 0);
+          return (
+            <div key={s.id} style={{
+              flex: 1,
+              padding: '12px 14px',
+              border: `1px solid ${danger ? 'rgba(200,20,20,0.4)' : warn ? 'rgba(200,20,20,0.15)' : 'rgba(255,255,255,0.07)'}`,
+              borderRadius: 10,
+              background: danger ? 'rgba(100,0,0,0.12)' : 'rgba(255,255,255,0.02)',
+              boxShadow: danger ? '0 0 20px rgba(180,0,0,0.15)' : 'none',
+            }}>
+              {/* Иконка + название */}
+              <div className="flex items-center gap-2 mb-3">
+                <Icon name={ICONS[s.id] ?? 'Wrench'} size={14}
+                  className={danger ? 'text-primary' : warn ? 'text-orange-500/70' : 'text-white/30'} />
+                <span className="font-display text-[11px] tracking-widest uppercase"
+                  style={{ color: danger ? '#e82020' : 'rgba(255,255,255,0.55)' }}>
+                  {s.name}
+                </span>
               </div>
-            );
-          })}
-        </div>
+
+              {/* Прогресс-бар */}
+              <div style={{ height: 3, background: 'rgba(255,255,255,0.07)', borderRadius: 2, marginBottom: 10 }}>
+                <div style={{
+                  height: '100%', borderRadius: 2,
+                  width: `${p * 100}%`,
+                  background: danger
+                    ? 'linear-gradient(90deg, #7a0000, #e82020)'
+                    : warn
+                    ? 'linear-gradient(90deg, #5a2000, #c05010)'
+                    : 'linear-gradient(90deg, #2a2a2a, #606060)',
+                  boxShadow: danger ? '0 0 10px rgba(220,20,20,0.8)' : 'none',
+                  transition: 'width 0.5s ease',
+                }} />
+              </div>
+
+              {/* Процент */}
+              <div className="font-display text-2xl tracking-wide mb-1"
+                style={{ color: danger ? '#e82020' : warn ? '#c05010' : 'rgba(255,255,255,0.7)' }}>
+                {Math.round(p * 100)}<span style={{ fontSize: 12, opacity: 0.6 }}>%</span>
+              </div>
+
+              {/* Остаток */}
+              <div style={{ color: 'rgba(255,255,255,0.28)', fontSize: 10, fontFamily: 'Roboto, sans-serif', letterSpacing: '0.05em' }}>
+                {remainH} ч · {remainK.toLocaleString('ru-RU')} км
+              </div>
+
+              {/* Статус */}
+              {danger && (
+                <div style={{ marginTop: 8, color: '#e82020', fontSize: 10, fontFamily: 'Oswald, sans-serif', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
+                  ⚠ Требует замены
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      <div style={{ height: 1, background: 'rgba(255,255,255,0.05)' }} />
-
-      <div className="grid grid-cols-2 gap-4">
-        <StatBox label="Моточасы" value={`${engineHours.toLocaleString('ru-RU')} ч`} active={engineRunning} />
-        <StatBox label="GPS пробег" value={`${totalKm.toLocaleString('ru-RU')} км`} />
-        <StatBox label="Напряжение" value={`${voltage.toFixed(1)} В`} active={engineRunning} warn={!engineRunning} />
-        <StatBox label="Двигатель" value={engineRunning ? 'Работает' : 'Заглушён'} active={engineRunning} warn={!engineRunning} />
+      {/* Нижняя строка: моточасы, пробег, напряжение */}
+      <div className="flex gap-3 mt-1">
+        <MiniStat label="Моточасы"   value={`${engineHours.toLocaleString('ru-RU')} ч`}   active={engineRunning} />
+        <MiniStat label="GPS пробег" value={`${totalKm.toLocaleString('ru-RU')} км`} />
+        <MiniStat label="Напряжение" value={`${voltage.toFixed(1)} В`} active={engineRunning} dim={!engineRunning} />
+        <MiniStat label="Двигатель"  value={engineRunning ? 'Работает' : 'Стоп'}      active={engineRunning} dim={!engineRunning} />
       </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, active, dim }: { label: string; value: string; active?: boolean; dim?: boolean }) {
+  return (
+    <div style={{
+      flex: 1, padding: '8px 12px',
+      border: `1px solid ${active ? 'rgba(180,20,20,0.2)' : 'rgba(255,255,255,0.05)'}`,
+      borderRadius: 8,
+      background: active ? 'rgba(80,0,0,0.06)' : 'rgba(255,255,255,0.015)',
+    }}>
+      <div style={{ fontSize: 9, fontFamily: 'Oswald,sans-serif', letterSpacing: '0.25em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.25)', marginBottom: 3 }}>{label}</div>
+      <div className="font-display text-sm tracking-wide" style={{ color: dim ? 'rgba(255,255,255,0.2)' : active ? '#d05050' : 'rgba(255,255,255,0.7)' }}>{value}</div>
     </div>
   );
 }
